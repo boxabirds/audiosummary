@@ -1,13 +1,22 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import whisper_timestamped as whisper
 import tempfile
 import json
 import openai
+from pydub.utils import mediainfo
+from pydub import AudioSegment
+import numpy as np
+import io
+
 
 app = Flask(__name__)
 CORS(app)  # Initialize Flask-CORS with the default parameters
 
+def get_sample_rate(file_path):
+    info = mediainfo(file_path)
+    return int(info['sample_rate'])
 
 # extract_segments_with_id takes a transcript and returns a list of segments with their ids
 def extract_segments_with_id(transcript):
@@ -34,9 +43,6 @@ def parse_response(response):
     return response
 
 
-from pydub import AudioSegment
-import numpy as np
-import io
 
 def extract_audio(segment, audio_data, sample_rate=16000):
     """
@@ -104,6 +110,9 @@ def stitch_audio(audio_segments, fade_in, fade_out, silence):
 
 @app.route('/process_audio', methods=['POST'])
 def process_audio():
+    CACHE_DIR = "cache/"
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    
     if 'file' not in request.files:
         return jsonify({'error': 'No file part in the request'}), 400
 
@@ -111,21 +120,39 @@ def process_audio():
     if file.filename == '':
         return jsonify({'error': 'No selected file'}), 400
     
-    # Save the file temporarily
-    temp_file = tempfile.NamedTemporaryFile(delete=False)
-    file.save(temp_file.name)
+    # save the mp3 to the cache directory
+    with open(CACHE_DIR + file.filename, 'wb') as f:
+        f.write(file.read())
 
-    # Load the audio and model
-    audio, sample_rate = whisper.load_audio(temp_file.name)
-    model = whisper.load_model("tiny", device="cpu") # use "medium" for better results but 10x slower
+    result = None
+    # we cache the transcript mostly for development purposes -- depending on model size and audio length, it can take 10 minutes or as long as 2 hours to transcribe
+    # if the corresponding cache file exists, use that instead of transcribing again
+    if os.path.exists(CACHE_DIR + file.filename + ".json" ):
+        # load the cached mp3 file
+        with open(CACHE_DIR + file.filename, 'rb') as f:
+            audio = f.read()
 
-    # Transcribe the audio
-    result = whisper.transcribe_timestamped(model, audio, language="en", vad=True, beam_size=5, best_of=5, temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0))
+        with open(CACHE_DIR + file.filename + ".json") as f:
+            result = json.load(f)
 
-    # dump segments for debugging
-    segments = extract_segments_with_id(result)
-    with open(file.filename + ".segments.json", 'w') as f:
-        json.dump(segments, f)
+        with open(CACHE_DIR + file.filename + "segments.json") as f:
+            segments = json.load(f)
+
+    else:
+        # Load the audio and model
+        audio = whisper.load_audio(file.filename)
+        model = whisper.load_model("tiny", device="cpu") # use "medium" for better results but 10x slower
+
+        # Transcribe the audio
+        result = whisper.transcribe_timestamped(model, audio, language="en", vad=True, beam_size=5, best_of=5, temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0))
+
+        # cache result in a file with the same name as the uploaded file
+        with open(CACHE_DIR + file.filename + ".json", 'w') as f:
+            json.dump(result, f)
+
+        segments = extract_segments_with_id(result)
+        with open(file.filename + ".segments.json", 'w') as f:
+            json.dump(segments, f)
 
     # Step 2: Select the top segments
     prompt = "below is a list of sentence segments, prefixed by their segment id. please perform an extractive summary of no more than 20% of these sentences: specifically assess the text of all the segments and return the ids only of the segments that you deem to be the most important and as such meet the requirements of the top 20%.\n\n" + json.dumps(segments)
@@ -137,6 +164,7 @@ def process_audio():
     top_segments = [segment for segment in segments if segment.id in top_ids]
 
     # Step 3: Extract the corresponding audio
+    sample_rate = get_sample_rate(file.filename)
     audio_segments = [extract_audio(segment, audio, sample_rate) for segment in top_segments]
 
     # Step 4: Stitch the audio together

@@ -10,6 +10,8 @@ whisper-timestamped = {git = "https://github.com/linto-ai/whisper-timestamped"}
 onnxruntime = "*"
 torchaudio = "*"
 openai = "*"
+werkzeug = "*"
+pydub = "*"
 
 [dev-packages]
 pytest = "*"
