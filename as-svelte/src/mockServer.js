@@ -5,9 +5,9 @@ export async function processAudio(file) {
       setTimeout(() => {
         resolve({
           sentences: [
-            { id: 1, text: "This is a short sentence.", selected: false },
-            { id: 2, text: "This is slightly longer.", selected: false },
-            { id: 3, text: "Here is the longest sentence of all, filled with grandeur and eloquence.", selected: false }
+            { id: 1, text: "This is a short sentence.", selected: true },
+            { id: 2, text: "This is slightly longer.", selected: true },
+            { id: 3, text: "Here is the longest sentence of all, filled with grandeur and eloquence.", selected: true }
           ],
           audioPath: '/lesson-of-greatness-daniel-ek.mp3' // the path to your mp3 file
         });

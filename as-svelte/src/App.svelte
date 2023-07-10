@@ -1,5 +1,6 @@
 <script>
-	import { processAudio, processSelectedSentences } from './mockServer.js';
+	import {  processSelectedSentences } from './mockServer.js';
+	import { processAudio } from './apiClient.js';
 	import FileUpload from './FileUpload.svelte';
 	import SentenceList from './SentenceList.svelte';
 	import AudioPlayer from './AudioPlayer.svelte';
