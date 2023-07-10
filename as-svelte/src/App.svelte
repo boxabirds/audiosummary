@@ -8,14 +8,20 @@
   
 	let currentStep = 1;
 	let processing = false;
+	let showSpinner = false;
+	let spinnerTimeout;  
+
 	let sentences = [];
 	let finalAudio = '';
   
 	async function uploadFile(file) {
 	  processing = true;
+	  spinnerTimeout = setTimeout(() => showSpinner = true, 1000); 
   
 	  let response = await processAudio(file);
-  
+	  clearTimeout(spinnerTimeout);  // Clear the timeout when processing is done
+      showSpinner = false;  // Hide the spinner
+
 	  if (response) {
 		sentences = response.sentences;
 		finalAudio = response.audioPath; // update the finalAudio path
@@ -61,7 +67,7 @@
 </style>
 
 <div class="container">
-    {#if processing}
+    {#if showSpinner}
         <Spinner />
     {:else if currentStep === 1}
         <div class="step">

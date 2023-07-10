@@ -6,8 +6,13 @@ name = "pypi"
 [packages]
 flask = "*"
 flask-cors = "*"
+whisper-timestamped = {git = "https://github.com/linto-ai/whisper-timestamped"}
+onnxruntime = "*"
+torchaudio = "*"
+openai = "*"
 
 [dev-packages]
+pytest = "*"
 
 [requires]
 python_version = "3.11"
