@@ -1,5 +1,5 @@
 <script>
-	import { processAudio } from './mockServer.js';
+	import { processAudio, processSelectedSentences } from './mockServer.js';
 	import FileUpload from './FileUpload.svelte';
 	import SentenceList from './SentenceList.svelte';
 	import AudioPlayer from './AudioPlayer.svelte';
@@ -24,9 +24,18 @@
 	  processing = false;
 	}
   
-	function selectSentences(selectedSentences) {
-	  sentences = selectedSentences;
-	  currentStep++;
+	async function selectSentences(selectedSentences) {
+		sentences = selectedSentences;
+		processing = true;
+
+		let response = await processSelectedSentences(sentences.map(s => s.id));
+
+		if (response) {
+		finalAudio = response.audioPath; // update the finalAudio path
+		currentStep++;
+		}
+
+		processing = false;
 	}
   
 	function newSummary() {
@@ -51,21 +60,19 @@
 </style>
 
 <div class="container">
-	{#if currentStep === 1}
-		<div class="step">
-			{#if processing}
-				<Spinner />
-			{:else}
-				<FileUpload {processing} on:upload={event => uploadFile(event.detail.file)} />
-			{/if}
-		</div>
-	{:else if currentStep === 2}
-		<div class="step">
-			<SentenceList {processing} {sentences} on:select={event => selectSentences(event.detail.sentences)} />
-		</div>
-	{:else}
-		<div class="step">
-			<AudioPlayer {finalAudio} on:newSummary={newSummary} />
-		</div>
-	{/if}
+    {#if processing}
+        <Spinner />
+    {:else if currentStep === 1}
+        <div class="step">
+            <FileUpload {processing} on:upload={event => uploadFile(event.detail.file)} />
+        </div>
+    {:else if currentStep === 2}
+        <div class="step">
+            <SentenceList {processing} {sentences} on:select={event => selectSentences(event.detail)} />
+        </div>
+    {:else}
+        <div class="step">
+            <AudioPlayer {finalAudio} on:newSummary={newSummary} />
+        </div>
+    {/if}
 </div>

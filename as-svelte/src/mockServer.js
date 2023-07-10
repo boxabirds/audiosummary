@@ -15,3 +15,14 @@ export async function processAudio(file) {
     });
   }
   
+export async function processSelectedSentences(sentenceIds) {
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        console.log(`Sentences sent to the server: ${sentenceIds}`);
+        resolve({
+          audioPath: '/lesson-of-greatness-daniel-ek.mp3' // the path to your mp3 file
+        });
+      }, 2000);
+    });
+  }
+  
