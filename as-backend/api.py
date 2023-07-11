@@ -5,19 +5,17 @@ import whisper_timestamped as whisper
 import tempfile
 import json
 import openai
-from pydub.utils import mediainfo
 from pydub import AudioSegment
 import numpy as np
 import io
 from tqdm import tqdm
+from pathlib import Path
+import ffmpeg
 
 
 app = Flask(__name__)
 CORS(app)  # Initialize Flask-CORS with the default parameters
 
-def get_sample_rate(file_path):
-    info = mediainfo(file_path)
-    return int(info['sample_rate'])
 
 # extract_segments_with_id takes a transcript and returns a list of segments with their ids
 def extract_segments_with_id(transcript):
@@ -72,71 +70,27 @@ def convert_openai_response_to_int_array(response):
     response = [int(id) for id in response]
     return response
 
+def add_audio_fades(segment, fade_in=300, fade_out=300):
+    # Applying fade in and fade out effect
+    segment = segment.fade_in(fade_in).fade_out(fade_out)
+    return segment
 
+def create_audio_summary(source_file_path:Path, segments):
+    original_audio = AudioSegment.from_mp3(source_file_path)
+    silence = AudioSegment.silent(duration=1000)
 
-def extract_audio(segment, audio_data, sample_rate=16000):
-    """
-    Extract a segment from an audio data array.
-
-    Parameters:
-    segment (dict): The segment dict with 'start' and 'end' keys in seconds.
-    audio_data (numpy.ndarray): The audio data array.
-    sample_rate (int): The sample rate of the audio data.
-
-    Returns:
-    AudioSegment: The extracted audio segment.
-    """
-    print(f"Extracting audio segment: {segment}")
-    # Convert the audio data to a byte stream
-    audio_byte_stream = io.BytesIO()
-    audio_as_int16 = np.int16(audio_data * 32767).tobytes()
-    audio_byte_stream.write(audio_as_int16)
-    audio_byte_stream.seek(0)
-
-    print(f"Audio byte stream: {audio_byte_stream}")
-    # Load the audio data as an AudioSegment
-    audio = AudioSegment.from_raw(audio_byte_stream, sample_width=2, channels=1, frame_rate=sample_rate)
-
-    # Convert the start and end times to milliseconds
-    start_time_ms = segment['start'] * 1000
-    end_time_ms = segment['end'] * 1000
-
-    # Extract the segment
-    segment_audio = audio[start_time_ms:end_time_ms]
-
-    return segment_audio
-
-
-
-
-def stitch_audio(audio_segments, fade_in, fade_out, silence):
-    """
-    Stitch together a list of audio segments.
-
-    Parameters:
-    audio_segments (list of AudioSegment): The audio segments to stitch together.
-    fade_in (float): The duration of the fade-in effect in seconds.
-    fade_out (float): The duration of the fade-out effect in seconds.
-    silence (float): The duration of the silence to insert between segments in seconds.
-
-    Returns:
-    AudioSegment: The stitched-together audio.
-    """
-    # Convert the fade-in, fade-out, and silence durations to milliseconds
-    fade_in_ms = fade_in * 1000
-    fade_out_ms = fade_out * 1000
-    silence_ms = silence * 1000
-
-    # Create an empty AudioSegment for the silence
-    silence_segment = AudioSegment.silent(duration=silence_ms)
-
-    # Add fade-in and fade-out effects to each segment and concatenate them with silence in between
-    stitched_audio = AudioSegment.empty()
-    for segment in audio_segments:
-        segment = segment.fade_in(fade_in_ms).fade_out(fade_out_ms)
-        stitched_audio += segment + silence_segment
-
-    return stitched_audio
+    result_audio = AudioSegment.empty()
+    for segment in segments:
+        start = segment["start"] * 1000
+        end = segment["end"] * 1000
+        extract = original_audio[start:end] # start and end times are in milliseconds
+        extract = add_audio_fades(extract)
+        result_audio += extract + silence
+        
+    file = Path(source_file_path)
+    summary_filename = f"{file.stem}-summary.mp3"
+    result_audio.export(f"{summary_filename}", format="mp3")
+    return summary_filename
 
 
 TRANSCRIPT_PREFIX = ".json"
@@ -237,25 +191,21 @@ def process_audio():
     top_ids = [convert_openai_response_to_int_array(r) for r in responses]
     top_ids = [item for sublist in top_ids for item in sublist]
 
-    # the segment id is a sequence so to ensure we preserve the order we sort the segments by id
-    top_segments = sorted([segment for segment in segments if segment['id'] in top_ids], key=lambda x:x['id'])
+    # now build up a list of top segments with their start and end times from the original transcript
+    top_segments = []
+    for segment in transcript["segments"]:
+        if segment["id"] in top_ids:
+            top_segments.append({
+                'id': segment["id"],
+                'text': segment["text"],
+                'start': segment["start"],
+                'end': segment["end"]
+            })
+    
+    
     print( f"Top segments: {top_segments}")
 
-    # Step 3: Extract the corresponding audio
-    sample_rate = get_sample_rate(file.filename)
-    audio_segments = [extract_audio(segment, audio, sample_rate) for segment in top_segments]
-    # dump audio segments to file for debugging
-    print(f"Dumping {len(audio_segments)} audio segments to files")
-    for i, audio_segment in enumerate(audio_segments):
-        audio_segment.export(f"segment_{i}.mp3", format="mp3")
-
-    # Step 4: Stitch the audio together
-    summary_audio = stitch_audio(audio_segments, fade_in=0.3, fade_out=0.3, silence=1)
-
-    # Save the summary audio to a file
-    print(f"Saving summary audio to {file.filename}-summary.mp3")
-    summary_audio.export(f"{file.filename}-summary.mp3", format="mp3")
-
+    summary_filename = create_audio_summary(CACHE_DIR + file.filename, top_segments)
 
     response = {
         'sentences': [
@@ -263,7 +213,7 @@ def process_audio():
             { 'id': 2, 'text': "This is slightly longer.", 'selected': True },
             { 'id': 3, 'text': "Here is the longest sentence of all, filled with grandeur and eloquence.", 'selected': True }
         ],
-        'audioPath': '/lesson-of-greatness-daniel-ek.mp3'  # the path to your mp3 file
+        'audioPath': "/" + summary_filename  # the path to your mp3 file
     }
 
     return jsonify(response)
