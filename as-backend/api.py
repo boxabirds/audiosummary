@@ -75,20 +75,31 @@ def add_audio_fades(segment, fade_in=300, fade_out=300):
     segment = segment.fade_in(fade_in).fade_out(fade_out)
     return segment
 
-def create_audio_summary(source_file_path:Path, segments):
+def create_audio_summary(source_file:str, segments):
+    source_file_path = Path(source_file)
     original_audio = AudioSegment.from_mp3(source_file_path)
-    silence = AudioSegment.silent(duration=1000)
 
+    prev_end = None
     result_audio = AudioSegment.empty()
-    for segment in segments:
-        start = segment["start"] * 1000
-        end = segment["end"] * 1000
-        extract = original_audio[start:end] # start and end times are in milliseconds
-        extract = add_audio_fades(extract)
-        result_audio += extract + silence
-        
-    file = Path(source_file_path)
-    summary_filename = f"{file.stem}-summary.mp3"
+    for index, segment in enumerate(segments):
+        start = max(0, segment["start"] * 1000 - 300)    # Mind boundaries: no negative times
+        end = segment["end"] * 1000 + 300                # Extra boundary check not needed as pydub handles overshot
+
+        if prev_end is not None and start < prev_end:
+            start = prev_end                             # Ensure seamless audio between adjacent segments
+
+        extract = original_audio[start:end]              
+
+        # Apply fades but avoid in case of adjacent segments
+        if start > 0:                                    
+            extract = extract.fade_in(300)
+        if index == len(segments) - 1 or (index < len(segments) - 1 and segments[index + 1]["start"] * 1000 > segment["end"] * 1000):
+            extract = extract.fade_out(300)
+
+        result_audio += extract                          # Concatenate segment
+        prev_end = segment["end"] * 1000                 # Store previous segment end time 
+
+    summary_filename = f"{source_file_path.stem}-summary.mp3"
     result_audio.export(f"{summary_filename}", format="mp3")
     return summary_filename
 
