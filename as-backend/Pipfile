@@ -12,6 +12,7 @@ torchaudio = "*"
 openai = "*"
 werkzeug = "*"
 pydub = "*"
+tqdm = "*"
 
 [dev-packages]
 pytest = "*"
