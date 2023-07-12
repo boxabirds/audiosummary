@@ -14,7 +14,7 @@ import io
 from tqdm import tqdm
 from pathlib import Path
 import ffmpeg
-
+from sentence_splitter import SentenceSplitter, split_text_into_sentences
 
 app = Flask(__name__)
 CORS(app)  # Initialize Flask-CORS with the default parameters
@@ -151,7 +151,6 @@ def create_audio_summary(source_file:str, segments):
 
 
 TRANSCRIPT_PREFIX = ".json"
-SEGMENTS_PREFIX = ".segments.json"
 MAX_TOKENS = 8192
 PROMPT_BASE = "below is a list of sentence segments, prefixed by their segment id. please perform an extractive summary of no more than 20% of these sentences: specifically assess the text of all the segments and return the ids only of the segments that you deem to be the most important and as such meet the requirements of the top 20%.\n\n"
 PROMPT_BASE_ESTD_NUM_TOKENS = estimate_num_tokens(PROMPT_BASE)
@@ -162,6 +161,14 @@ def send_openai_request(segment_batch):
     estd_num_prompt_tokens = estimate_num_tokens(prompt)
     response = openai.ChatCompletion.create(model="gpt-4", messages=[{"role": "system", "content": prompt}], max_tokens=MAX_TOKENS-estd_num_prompt_tokens)
     return response
+
+
+
+
+def split_sentences(text):
+    splitter = SentenceSplitter(language='en')
+    sentences = splitter.split(text)
+    return [{'id': i, 'sentence': sentence.strip()} for i, sentence in enumerate(sentences)]
 
 
 @app.route('/process_audio', methods=['POST', 'OPTIONS'])
@@ -203,18 +210,7 @@ def process_audio():
         with open(CACHE_DIR + file.filename + TRANSCRIPT_PREFIX, 'w') as f:
             json.dump(transcript, f)
 
-    # segments are cached
-    if os.path.exists(CACHE_DIR + file.filename + SEGMENTS_PREFIX ):
-        print("Cache found -- loading segments from file")
-        with open(CACHE_DIR + file.filename + SEGMENTS_PREFIX) as f:
-            segments = json.load(f)
-
-    # segments are not cached
-    else:
-        print("Cache not found -- extracting segments from transcript")
-        segments = extract_segments_with_id(transcript)
-        with open(CACHE_DIR + file.filename + SEGMENTS_PREFIX, 'w') as f:
-            json.dump(segments, f)
+    # convert raw transcript into an array of sentences created by sentence-splitter
 
     # Step 2: Select the top segments in batches to overcome OpenAI's limit
     responses = []

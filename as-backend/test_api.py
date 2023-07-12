@@ -3,7 +3,7 @@ from flask.testing import FlaskClient
 from werkzeug.datastructures import FileStorage
 import io
 import os
-from api import extract_sentence_timestamps
+from api import extract_sentence_timestamps, split_sentences
 
 def test_process_audio(client: FlaskClient):
     # Load the audio file
@@ -137,3 +137,19 @@ def client():
 def test_extract_sentence_timestamps(sentences, segments, expected):
     result = extract_sentence_timestamps(sentences, segments)
     assert result == expected, f'Expected {expected}, but got {result}'
+
+
+
+
+@pytest.mark.parametrize("input_text,expected_output", [
+    ("", []),
+    ("Hello world!", [{'id': 0, 'sentence': 'Hello world!'}]),
+    ("\t Hello world! \n Second sentence.", [{'id': 0, 'sentence': 'Hello world!'}, {'id': 1, 'sentence': 'Second sentence.'}]),
+    ("Hello world", [{'id': 0, 'sentence': 'Hello world'}]),
+    ("Hello!! World!", [{'id': 0, 'sentence': 'Hello!!'}, {'id': 1, 'sentence': 'World!'}]),
+    ("Hello  world!", [{'id': 0, 'sentence': 'Hello world!'}]),
+    ("The item costs $1.50. It's available at http://example.com.", 
+     [{'id': 0, 'sentence': 'The item costs $1.50.'}, {'id': 1, 'sentence': "It's available at http://example.com."}])
+])
+def test_split_sentences(input_text, expected_output):
+    assert split_sentences(input_text) == expected_output

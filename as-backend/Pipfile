@@ -13,6 +13,7 @@ openai = "*"
 werkzeug = "*"
 pydub = "*"
 tqdm = "*"
+sentence-splitter = "*"
 
 [dev-packages]
 pytest = "*"
