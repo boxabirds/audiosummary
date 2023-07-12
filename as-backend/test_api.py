@@ -83,7 +83,7 @@ def client():
         [{"id": 0, "text": "We referenced the products we used.", "start": 0.08, "end": 2.0}]
     ),
     (
-        [{"id": 0, "text": "We referenced the products we used today."}],
+        [{"id": 0, "text": "We referenced the products, we used today."}],
         [
             {
                 "id": 0,
@@ -108,7 +108,7 @@ def client():
                 ]
             }
         ],
-        [{"id": 0, "text": "We referenced the products we used today.", "start": 0.08, "end": 2.36}]
+        [{"id": 0, "text": "We referenced the products, we used today.", "start": 0.08, "end": 2.36}]
     ),
     (
         [{"id": 0, "text": "the products we used"}],

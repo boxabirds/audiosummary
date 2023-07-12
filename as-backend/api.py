@@ -1,5 +1,7 @@
+from ast import Dict
 import os
 import string
+from typing import Any
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import whisper_timestamped as whisper
@@ -18,7 +20,7 @@ app = Flask(__name__)
 CORS(app)  # Initialize Flask-CORS with the default parameters
 
 
-def extract_sentence_timestamps(sentences, segments):
+def extract_sentence_timestamps(sentences: list[dict[str, Any]], segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
     # written and tested by chatgpt code interpreter 
     # Initialize list to hold all words and their timestamps
     all_words = []
