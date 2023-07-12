@@ -1,4 +1,5 @@
 import os
+import string
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import whisper_timestamped as whisper
@@ -15,6 +16,49 @@ import ffmpeg
 
 app = Flask(__name__)
 CORS(app)  # Initialize Flask-CORS with the default parameters
+
+
+def extract_sentence_timestamps(sentences, segments):
+    # written and tested by chatgpt code interpreter 
+    # Initialize list to hold all words and their timestamps
+    all_words = []
+
+    # Iterate over each segment
+    for segment in segments:
+        # Extend all_words list with words in current segment
+        all_words.extend(segment["words"])
+
+    # Function to remove punctuation from a word
+    def remove_punctuation(word):
+        return word.strip(string.punctuation)
+
+    # Iterate over each sentence
+    for sentence in sentences:
+        # Split sentence into words
+        sentence_words = sentence["text"].split()
+
+        # Initialize word index for sentence and segments
+        sentence_word_index = 0
+        segment_word_index = 0
+
+        # Find the starting timestamp
+        while sentence_word_index < len(sentence_words) and segment_word_index < len(all_words):
+            if remove_punctuation(sentence_words[sentence_word_index]) == remove_punctuation(all_words[segment_word_index]["text"]):
+                sentence["start"] = all_words[segment_word_index]["start"]
+                break
+            segment_word_index += 1
+
+        # Find the ending timestamp
+        while sentence_word_index < len(sentence_words) and segment_word_index < len(all_words):
+            if remove_punctuation(sentence_words[sentence_word_index]) == remove_punctuation(all_words[segment_word_index]["text"]):
+                sentence_word_index += 1
+            if sentence_word_index == len(sentence_words) or (segment_word_index < len(all_words) - 1 and remove_punctuation(sentence_words[sentence_word_index]) != remove_punctuation(all_words[segment_word_index + 1]["text"])):
+                sentence["end"] = all_words[segment_word_index]["end"]
+            segment_word_index += 1
+
+    return sentences
+
+
 
 
 # extract_segments_with_id takes a transcript and returns a list of segments with their ids
