@@ -3,7 +3,7 @@ from flask.testing import FlaskClient
 from werkzeug.datastructures import FileStorage
 import io
 import os
-from api import extract_sentence_timestamps, split_sentences
+from api import split_sentences, create_sentence_objects
 
 def test_process_audio(client: FlaskClient):
     # Load the audio file
@@ -44,112 +44,80 @@ def client():
         yield client
 
 
-@pytest.mark.parametrize("sentences, segments, expected", [
-    (
-        [{"id": 0, "text": "We referenced the products."}],
-        [
-            {
-                "id": 0,
-                "words": [
-                    {"text": "We", "start": 0.08, "end": 0.26},
-                    {"text": "referenced", "start": 0.26, "end": 0.78},
-                    {"text": "the", "start": 0.78, "end": 1.02},
-                    {"text": "products.", "start": 1.02, "end": 1.5}
-                ]
-            }
-        ],
-        [{"id": 0, "text": "We referenced the products.", "start": 0.08, "end": 1.5}]
-    ),
-    (
-        [{"id": 0, "text": "We referenced the products we used."}],
-        [
-            {
-                "id": 0,
-                "words": [
-                    {"text": "We", "start": 0.08, "end": 0.26},
-                    {"text": "referenced", "start": 0.26, "end": 0.78},
-                    {"text": "the", "start": 0.78, "end": 1.02},
-                    {"text": "products", "start": 1.02, "end": 1.5}
-                ]
-            },
-            {
-                "id": 1,
-                "words": [
-                    {"text": "we", "start": 1.5, "end": 1.7},
-                    {"text": "used.", "start": 1.7, "end": 2.0}
-                ]
-            }
-        ],
-        [{"id": 0, "text": "We referenced the products we used.", "start": 0.08, "end": 2.0}]
-    ),
-    (
-        [{"id": 0, "text": "We referenced the products, we used today."}],
-        [
-            {
-                "id": 0,
-                "words": [
-                    {"text": "We", "start": 0.08, "end": 0.26},
-                    {"text": "referenced", "start": 0.26, "end": 0.78},
-                    {"text": "the", "start": 0.78, "end": 1.02},
-                    {"text": "products", "start": 1.02, "end": 1.5}
-                ]
-            },
-            {
-                "id": 1,
-                "words": [
-                    {"text": "we", "start": 1.5, "end": 1.7},
-                    {"text": "used", "start": 1.7, "end": 2.0}
-                ]
-            },
-            {
-                "id": 2,
-                "words": [
-                    {"text": "today.", "start": 2.0, "end": 2.36}
-                ]
-            }
-        ],
-        [{"id": 0, "text": "We referenced the products, we used today.", "start": 0.08, "end": 2.36}]
-    ),
-    (
-        [{"id": 0, "text": "the products we used"}],
-        [
-            {
-                "id": 0,
-                "words": [
-                    {"text": "We", "start": 0.08, "end": 0.26},
-                    {"text": "referenced", "start": 0.26, "end": 0.78},
-                    {"text": "the", "start": 0.78, "end": 1.02},
-                    {"text": "products", "start": 1.02, "end": 1.5}
-                ]
-            },
-            {
-                "id": 1,
-                "words": [
-                    {"text": "we", "start": 1.5, "end": 1.7},
-                    {"text": "used", "start": 1.7, "end": 2.0},
-                    {"text": "today.", "start": 2.0, "end": 2.36}
-                ]
-            }
-        ],
-        [{"id": 0, "text": "the products we used", "start": 0.78, "end": 2.0}]
-    )
+import pytest
+
+import pytest
+
+@pytest.mark.parametrize("raw_transcript, word_objects, expected", [
+    # Test case 1: Basic test case
+    ("Hello world. How are you?", 
+     [
+        {"id": 0, "start": 0.0, "end": 0.5, "text": "Hello"},
+        {"id": 1, "start": 0.5, "end": 1.0, "text": "world"},
+        {"id": 2, "start": 1.0, "end": 1.5, "text": "How"},
+        {"id": 3, "start": 1.5, "end": 2.0, "text": "are"},
+        {"id": 4, "start": 2.0, "end": 2.5, "text": "you"}
+     ],
+     [
+        {"id": 0, "text": "Hello world.", "start": 0.0, "end": 1.0},
+        {"id": 1, "text": "How are you?", "start": 1.0, "end": 2.5}
+     ]),
+     
+     # Test case 2: Repeated sentence
+    ("Hello world. Hello world.", 
+     [
+        {"id": 0, "start": 0.0, "end": 0.5, "text": "Hello"},
+        {"id": 1, "start": 0.5, "end": 1.0, "text": "world"},
+        {"id": 2, "start": 1.0, "end": 1.5, "text": "Hello"},
+        {"id": 3, "start": 1.5, "end": 2.0, "text": "world"}
+     ],
+     [
+        {"id": 0, "text": "Hello world.", "start": 0.0, "end": 1.0},
+        {"id": 1, "text": "Hello world.", "start": 1.0, "end": 2.0}
+     ]),
+     
+     # Test case 3: Empty lists
+    ("", [], []),
+     
+     # Test case 4: Additional words in a sentence
+    ("Hello world. Hello world again.", 
+     [
+        {"id": 0, "start": 0.0, "end": 0.5, "text": "Hello"},
+        {"id": 1, "start": 0.5, "end": 1.0, "text": "world"},
+        {"id": 2, "start": 1.0, "end": 1.5, "text": "Hello"},
+        {"id": 3, "start": 1.5, "end": 2.0, "text": "world"},
+        {"id": 4, "start": 2.0, "end": 2.5, "text": "again"}
+     ],
+     [
+        {"id": 0, "text": "Hello world.", "start": 0.0, "end": 1.0},
+        {"id": 1, "text": "Hello world again.", "start": 1.0, "end": 2.5}
+     ]),
+     
+     # Test case 5: Punctuation
+    ("Hello, world! How are you?", 
+     [
+        {"id": 0, "start": 0.0, "end": 0.5, "text": "Hello"},
+        {"id": 1, "start": 0.5, "end": 1.0, "text": "world"},
+        {"id": 2, "start": 1.0, "end": 1.5, "text": "How"},
+        {"id": 3, "start": 1.5, "end": 2.0, "text": "are"},
+        {"id": 4, "start": 2.0, "end": 2.5, "text": "you"}
+     ],
+     [
+        {"id": 0, "text": "Hello, world!", "start": 0.0, "end": 1.0},
+        {"id": 1, "text": "How are you?", "start": 1.0, "end": 2.5}
+     ]),
+     
+     # Test case 6: Single word sentence
+    ("Hello", 
+     [
+        {"id": 0, "start": 0.0, "end": 0.5, "text": "Hello"}
+     ],
+     [
+        {"id": 0, "text": "Hello", "start": 0.0, "end": 0.5}
+     ])
 ])
-def test_extract_sentence_timestamps(sentences, segments, expected):
-    result = extract_sentence_timestamps(sentences, segments)
-    assert result == expected, f'Expected {expected}, but got {result}'
+def test_create_sentence_objects(raw_transcript, word_objects, expected):
+    result = create_sentence_objects(raw_transcript, word_objects)
+    assert result == expected
 
 
-
-
-@pytest.mark.parametrize("input_text,expected_output", [
-    ("", []),
-    ("Hello world!", [{'id': 0, 'sentence': 'Hello world!'}]),
-    ("\t Hello world! \n Second sentence.", [{'id': 0, 'sentence': 'Hello world!'}, {'id': 1, 'sentence': 'Second sentence.'}]),
-    ("Hello world", [{'id': 0, 'sentence': 'Hello world'}]),
-    ("Hello!! World!", [{'id': 0, 'sentence': 'Hello!!'}, {'id': 1, 'sentence': 'World!'}]),
-    ("Hello  world!", [{'id': 0, 'sentence': 'Hello world!'}]),
-    ("The item costs $1.50. It's available at http://example.com.", 
-     [{'id': 0, 'sentence': 'The item costs $1.50.'}, {'id': 1, 'sentence': "It's available at http://example.com."}])
-])
-def test_split_sentences(input_text, expected_output):
-    assert split_sentences(input_text) == expected_output
