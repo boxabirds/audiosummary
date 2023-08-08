@@ -1,2 +1,2 @@
 # audiosummary
-Takes an audio file with spoken word in it and create an audio summary of it.
+Takes an audio file with spoken word in it and creates an audio summary of it.
